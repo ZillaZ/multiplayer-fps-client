@@ -1,8 +1,8 @@
 use game::GameManager;
 use network::get_stream;
 use objects::ObjectType;
-use raylib::prelude::Model;
 use raylib::{camera::Camera3D, math::Vector3, shaders::RaylibShader};
+use tokio::io::AsyncWriteExt;
 use std::collections::HashMap;
 
 pub mod game;
@@ -54,6 +54,6 @@ async fn main() {
         manager
             .update(&mut handle, &thread, &mut stream, &models_map)
             .await;
-        println!("{:?}", manager.objects);
     }
+    stream.flush().await.unwrap();
 }

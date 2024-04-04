@@ -24,7 +24,6 @@ impl GameManager {
         models_map: &HashMap<ObjectType, String>,
     ) {
         let new_state = network::connect(self, stream, handle).await;
-        println!("{:?}", new_state);
         self.player.set_state(new_state.clone());
         for x in new_state.objects.iter() {
             if self.objects.contains_key(&x.id) {
@@ -51,7 +50,7 @@ impl GameManager {
             player: Player::new(
                 camera,
                 1.0,
-                Object::new(handle, thread, model, Vector3::zero()),
+                Object::new(handle, thread, model, Vector3::zero(), Vector4::identity()),
                 Vector3::zero(),
             ),
         }
@@ -83,6 +82,7 @@ impl GameManager {
             object.model.set_transform(&object.rotation.to_matrix());
             draw.draw_model(&object.model, object.position, 1.0, Color::WHITE);
         }
+
         for player in self.players.iter() {
             draw.draw_model(
                 &self.player.object.model,

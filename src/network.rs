@@ -71,7 +71,6 @@ pub async fn connect(
         .unwrap();
     let _response = stream.read(&mut buf).await.unwrap();
     let parsed = ResponseSignal::from_bytes((&buf, 0)).unwrap();
-    println!("{} vs {}", _response, parsed.0 .0.len());
     parsed.1
 }
 
