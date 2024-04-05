@@ -11,6 +11,8 @@ pub enum ObjectType {
     PLAYER,
     #[deku(id = "0x3")]
     BALL,
+    #[deku(id = "0x4")]
+    RING
 }
 
 #[derive(Debug, DekuRead, DekuWrite, Clone)]
@@ -36,7 +38,12 @@ impl NetworkObject {
             thread,
             model,
             Vector3::new(self.position[0], self.position[1], self.position[2]),
-            Vector4::new(self.rotation[0], self.rotation[1], self.rotation[2], self.rotation[3])
+            Vector4::new(
+                self.rotation[0],
+                self.rotation[1],
+                self.rotation[2],
+                self.rotation[3],
+            ),
         )
     }
 }
@@ -54,12 +61,12 @@ impl Object {
         thread: &raylib::prelude::RaylibThread,
         model: Model,
         position: Vector3,
-        rotation: Vector4
+        rotation: Vector4,
     ) -> Self {
         Self {
             model,
             position,
-            rotation
+            rotation,
         }
     }
 

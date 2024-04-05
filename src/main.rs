@@ -2,8 +2,8 @@ use game::GameManager;
 use network::get_stream;
 use objects::ObjectType;
 use raylib::{camera::Camera3D, math::Vector3, shaders::RaylibShader};
-use tokio::io::AsyncWriteExt;
 use std::collections::HashMap;
+use tokio::io::AsyncWriteExt;
 
 pub mod game;
 pub mod lights;
@@ -40,6 +40,7 @@ async fn main() {
         (ObjectType::BALL, "static/models/ball.obj".into()),
         (ObjectType::GROUND, "static/models/untitled.obj".into()),
         (ObjectType::PLAYER, "static/models/ball.obj".into()),
+        (ObjectType::RING, "static/models/roscakk.obj".into())
     ]);
     let player_model = handle
         .load_model(&thread, "static/models/ball.obj")

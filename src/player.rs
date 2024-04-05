@@ -73,8 +73,16 @@ impl Player {
             new_state.translation[1],
             new_state.translation[2],
         );
-        self.camera.position = Vector3::new(new_state.camera_pos[0], new_state.camera_pos[1], new_state.camera_pos[2]);
-        self.camera.target = Vector3::new(new_state.camera_target[0], new_state.camera_target[1], new_state.camera_target[2]);
+        self.camera.position = Vector3::new(
+            new_state.camera_pos[0],
+            new_state.camera_pos[1],
+            new_state.camera_pos[2],
+        );
+        self.camera.target = Vector3::new(
+            new_state.camera_target[0],
+            new_state.camera_target[1],
+            new_state.camera_target[2],
+        );
         self.fwd = Vector3::new(new_state.fwd[0], new_state.fwd[1], new_state.fwd[2]);
         self.right = Vector3::new(new_state.right[0], new_state.right[1], new_state.right[2])
     }
