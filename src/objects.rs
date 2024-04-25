@@ -2,55 +2,20 @@ use deku::prelude::*;
 use raylib::math::{Vector3, Vector4};
 use raylib::models::Model;
 
-#[derive(Debug, DekuRead, DekuWrite, Clone, Hash, Eq, PartialEq)]
-#[deku(type = "u8")]
-pub enum ObjectType {
-    #[deku(id = "0x1")]
-    GROUND,
-    #[deku(id = "0x2")]
-    PLAYER,
-    #[deku(id = "0x3")]
-    BALL,
-    #[deku(id = "0x4")]
-    RING
-}
-
 #[derive(Debug, DekuRead, DekuWrite, Clone)]
 pub struct NetworkObject {
-    pub model_type: ObjectType,
-    position: [f32; 3],
-    rotation: [f32; 4],
-    pub id: u64,
-}
-
-impl NetworkObject {
-    pub fn to_object(
-        &self,
-        handle: &mut raylib::prelude::RaylibHandle,
-        thread: &raylib::prelude::RaylibThread,
-        models_map: &std::collections::HashMap<ObjectType, String>,
-    ) -> Object {
-        let model = handle
-            .load_model(thread, models_map.get(&self.model_type).unwrap())
-            .unwrap();
-        Object::new(
-            handle,
-            thread,
-            model,
-            Vector3::new(self.position[0], self.position[1], self.position[2]),
-            Vector4::new(
-                self.rotation[0],
-                self.rotation[1],
-                self.rotation[2],
-                self.rotation[3],
-            ),
-        )
-    }
+    pub position: [f32; 3],
+    pub rotation: [f32; 4],
+    #[deku(update = "self.id.len()")]
+    id_len: usize,
+    #[deku(count = "id_len")]
+    pub id: Vec<u8>,
 }
 
 #[derive(Debug)]
 pub struct Object {
     pub model: Model,
+    pub id: String,
     pub position: Vector3,
     pub rotation: Vector4,
 }
@@ -59,14 +24,24 @@ impl Object {
     pub fn new(
         handle: &mut raylib::prelude::RaylibHandle,
         thread: &raylib::prelude::RaylibThread,
-        model: Model,
-        position: Vector3,
-        rotation: Vector4,
+        id: String,
+        position: [f32; 3],
+        rotation: [f32; 4],
     ) -> Self {
         Self {
-            model,
-            position,
-            rotation,
+            id: id.clone(),
+            model: handle
+                .load_model(
+                    thread,
+                    &format!(
+                        "static/models/{}.obj",
+                        id.clone()
+                            .trim_matches(|x: char| x.to_string().parse::<i32>().is_ok())
+                    ),
+                )
+                .unwrap(),
+            position: Vector3::new(position[0], position[1], position[2]),
+            rotation: Vector4::new(rotation[0], rotation[1], rotation[2], rotation[3]),
         }
     }
 

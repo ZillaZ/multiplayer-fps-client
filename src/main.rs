@@ -1,8 +1,13 @@
 use game::GameManager;
 use network::get_stream;
-use objects::ObjectType;
-use raylib::{camera::Camera3D, math::Vector3, shaders::RaylibShader};
-use std::collections::HashMap;
+use raylib::{
+    camera::Camera3D,
+    math::{Rectangle, Vector3},
+    rgui::RaylibDrawGui,
+    shaders::RaylibShader,
+};
+use reader::*;
+use std::{collections::HashMap, ffi::CStr};
 use tokio::io::AsyncWriteExt;
 
 pub mod game;
@@ -10,9 +15,11 @@ pub mod lights;
 pub mod network;
 pub mod objects;
 pub mod player;
+pub mod reader;
 
 #[tokio::main]
 async fn main() {
+    build_models("static/models/scene.obj", "static/models/scene.mtl");
     let (mut handle, thread) = raylib::init()
         .height(768)
         .width(1366)
@@ -21,9 +28,8 @@ async fn main() {
         .msaa_4x()
         .resizable()
         .build();
-
     handle.set_target_fps(60);
-    handle.disable_cursor();
+    handle.gui_enable();
 
     let sky_shader = handle
         .load_shader(&thread, None, Some("static/shaders/shader.fs"))
@@ -36,12 +42,6 @@ async fn main() {
         )
         .unwrap();
 
-    let models_map = HashMap::<ObjectType, String>::from([
-        (ObjectType::BALL, "static/models/ball.obj".into()),
-        (ObjectType::GROUND, "static/models/untitled.obj".into()),
-        (ObjectType::PLAYER, "static/models/ball.obj".into()),
-        (ObjectType::RING, "static/models/roscakk.obj".into())
-    ]);
     let player_model = handle
         .load_model(&thread, "static/models/ball.obj")
         .unwrap();
@@ -52,9 +52,7 @@ async fn main() {
     let mut stream = get_stream().await;
 
     while !handle.window_should_close() {
-        manager
-            .update(&mut handle, &thread, &mut stream, &models_map)
-            .await;
+        manager.update(&mut handle, &thread, &mut stream).await;
     }
     stream.flush().await.unwrap();
 }

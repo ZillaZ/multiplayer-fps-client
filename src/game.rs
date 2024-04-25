@@ -1,18 +1,26 @@
-use std::collections::HashMap;
-
 use raylib::prelude::*;
 use raylib::{camera::Camera3D, drawing::RaylibMode3DExt};
+use std::collections::HashMap;
+use std::ffi::CString;
 use tokio::net::TcpStream;
 
 use crate::network::ResponseSignal;
 use crate::player::Player;
 use crate::{lights, network, objects::*};
 
+#[derive(PartialEq, Eq)]
+enum GameState {
+    Menu,
+    InGame,
+}
+
 pub struct GameManager {
     pub players: Vec<ResponseSignal>,
-    pub objects: HashMap<u64, Object>,
+    pub objects: HashMap<String, Object>,
     sky_shader: Shader,
     pub player: Player,
+    state: GameState,
+    once_game: bool,
 }
 
 impl GameManager {
@@ -21,20 +29,78 @@ impl GameManager {
         handle: &mut raylib::RaylibHandle,
         thread: &raylib::RaylibThread,
         stream: &mut TcpStream,
-        models_map: &HashMap<ObjectType, String>,
+    ) {
+        use GameState::*;
+        match self.state {
+            Menu => {
+                self.draw_menu(handle, thread);
+            }
+            InGame => {
+                if !self.once_game {
+                    handle.disable_cursor();
+                    self.once_game = true
+                }
+                self.player.update(handle);
+                self.do_game_logic(handle, thread, stream).await;
+                self.draw_game(handle, thread);
+            }
+        }
+    }
+    fn draw_menu(&mut self, handle: &mut RaylibHandle, thread: &RaylibThread) {
+        let screen_x = handle.get_screen_width() as f32;
+        let screen_y = handle.get_screen_height() as f32;
+        let button_width = 100.0;
+        let button_height = 50.0;
+
+        let mut draw_handle = handle.begin_drawing(thread);
+        draw_handle.clear_background(Color::WHITE);
+
+        let mut aux = CString::new("SEXO 2 IS REAL :0").unwrap();
+        draw_handle.gui_label(
+            Rectangle::new(0.0, 0.0, 5000.0, 1000.0),
+            Some(aux.as_c_str()),
+        );
+        aux = CString::new("Start Game").unwrap();
+        let start_game = draw_handle.gui_button(
+            Rectangle::new(
+                screen_x / 2.0 - button_width / 2.0,
+                screen_y / 2.0 - button_height / 2.0,
+                button_width,
+                button_height,
+            ),
+            Some(aux.as_c_str()),
+        );
+        if start_game {
+            self.state = GameState::InGame;
+        }
+    }
+    async fn do_game_logic(
+        &mut self,
+        handle: &mut RaylibHandle,
+        thread: &RaylibThread,
+        stream: &mut TcpStream,
     ) {
         let new_state = network::connect(self, stream, handle).await;
         self.player.set_state(new_state.clone());
         for x in new_state.objects.iter() {
-            if self.objects.contains_key(&x.id) {
-                self.objects.get_mut(&x.id).unwrap().update(x);
+            if let Some(object) = self
+                .objects
+                .get_mut(&String::from_utf8(x.id.clone()).unwrap())
+            {
+                object.update(x);
             } else {
-                let obj = x.to_object(handle, thread, &models_map);
-                self.objects.insert(x.id, obj);
+                let object = Object::new(
+                    handle,
+                    thread,
+                    String::from_utf8(x.id.clone()).unwrap(),
+                    x.position,
+                    x.rotation,
+                );
+                self.objects
+                    .insert(String::from_utf8(x.id.clone()).unwrap(), object);
             }
         }
         self.players = new_state.players;
-        self.draw(handle, thread);
     }
     pub fn new(
         sky_shader: Shader,
@@ -50,15 +116,18 @@ impl GameManager {
             player: Player::new(
                 camera,
                 1.0,
-                Object::new(handle, thread, model, Vector3::zero(), Vector4::identity()),
+                Object::new(handle, thread, "player".into(), [0.0; 3], [0.0; 4]),
                 Vector3::zero(),
             ),
+            state: GameState::Menu,
+            once_game: false,
         }
     }
 
-    fn draw(&mut self, handle: &mut RaylibHandle, thread: &RaylibThread) {
+    fn draw_game(&mut self, handle: &mut RaylibHandle, thread: &RaylibThread) {
         let mut draw_handle = handle.begin_drawing(thread);
         draw_handle.clear_background(Color::WHITE);
+
         self.draw_sky(&mut draw_handle);
         self.draw_objects(&mut draw_handle);
         self.draw_lights(&mut draw_handle);
