@@ -1,17 +1,24 @@
+use deku::{DekuContainerRead, DekuContainerWrite};
+use raylib::ffi::rAudioBuffer;
 use raylib::prelude::*;
 use raylib::{camera::Camera3D, drawing::RaylibMode3DExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, Join};
 use std::collections::HashMap;
-use std::ffi::CString;
 use tokio::net::TcpStream;
 
-use crate::network::ResponseSignal;
+use crate::gui::Draw;
+use crate::network::{get_stream, Reason, ResponseSignal, ServerResponse};
 use crate::player::Player;
+use crate::session::{JoinSessionRequest, NewSessionRequest, ServerRequest};
 use crate::{lights, network, objects::*};
 
 #[derive(PartialEq, Eq)]
 enum GameState {
-    Menu,
+    MainMenu,
+    CreateMenu,
+    JoinMenu,
     InGame,
+    ErrorMessage
 }
 
 pub struct GameManager {
@@ -21,6 +28,8 @@ pub struct GameManager {
     pub player: Player,
     state: GameState,
     once_game: bool,
+    draw: Draw,
+    server_error: Option<Reason>
 }
 
 impl GameManager {
@@ -32,48 +41,123 @@ impl GameManager {
     ) {
         use GameState::*;
         match self.state {
-            Menu => {
-                self.draw_menu(handle, thread);
+            MainMenu => {
+                self.draw_main_menu(handle, thread);
+            },
+            CreateMenu => {
+                self.draw_new_game_menu(handle, thread, stream).await;
+            },
+            JoinMenu => {
+                self.draw_join_game_menu(handle, thread, stream).await;
             }
             InGame => {
                 if !self.once_game {
                     handle.disable_cursor();
                     self.once_game = true
                 }
-                self.player.update(handle);
                 self.do_game_logic(handle, thread, stream).await;
                 self.draw_game(handle, thread);
+            },
+            ErrorMessage => {
+                self.draw_server_error(handle, thread);
             }
         }
     }
-    fn draw_menu(&mut self, handle: &mut RaylibHandle, thread: &RaylibThread) {
-        let screen_x = handle.get_screen_width() as f32;
-        let screen_y = handle.get_screen_height() as f32;
-        let button_width = 100.0;
-        let button_height = 50.0;
-
-        let mut draw_handle = handle.begin_drawing(thread);
-        draw_handle.clear_background(Color::WHITE);
-
-        let mut aux = CString::new("SEXO 2 IS REAL :0").unwrap();
-        draw_handle.gui_label(
-            Rectangle::new(0.0, 0.0, 5000.0, 1000.0),
-            Some(aux.as_c_str()),
-        );
-        aux = CString::new("Start Game").unwrap();
-        let start_game = draw_handle.gui_button(
-            Rectangle::new(
-                screen_x / 2.0 - button_width / 2.0,
-                screen_y / 2.0 - button_height / 2.0,
-                button_width,
-                button_height,
-            ),
-            Some(aux.as_c_str()),
-        );
-        if start_game {
-            self.state = GameState::InGame;
+    fn draw_main_menu(&mut self, handle: &mut RaylibHandle, thread: &RaylibThread) {
+        let mut handle = clear_screen(handle, thread);
+        let handle = &mut handle;
+        
+        self.draw.draw_label("Jogo Fodakkj", handle, [0.0, 25.0]);
+        if self.draw.draw_button("Create Session", handle, [0.0, 0.0]) {
+            self.state = GameState::CreateMenu;
+        }
+        if self.draw.draw_button("Join Session", handle, [0.0, -15.0]) {
+            self.state = GameState::JoinMenu;
         }
     }
+    async fn draw_new_game_menu(&mut self, handle: &mut RaylibHandle, thread: &RaylibThread, stream: &mut TcpStream) {
+        let mut handle = clear_screen(handle, thread);
+        let handle = &mut handle;
+        
+        self.draw.draw_label("Create Game", handle, [0.0, 25.0]);
+        self.draw.draw_label("Session ID:", handle, [0.0, 5.0]);
+        self.draw.draw_textbox("id", handle, [0.0, 0.0]);
+        self.draw.draw_label("Session Password:", handle, [0.0, -15.0]);
+        self.draw.draw_textbox("passwd", handle, [0.0, -20.0]);
+        if self.draw.draw_button("Back to Main Menu", handle, [-15.0, -30.0]) {
+            self.state = GameState::MainMenu;
+        }
+        if self.draw.draw_button("Create Session", handle, [15.0, -30.0]) {
+            match self.create_game(stream).await {
+                ServerResponse::Ok(signal) => {
+                    self.state = GameState::InGame;
+                    self.server_error = None;
+                },
+                ServerResponse::InvalidRequest(reason) => {
+                    self.state = GameState::ErrorMessage;
+                    self.server_error = Some(reason);
+                    *stream = get_stream().await;
+                }
+            }
+        }
+    }
+    async fn create_game(&mut self, stream: &mut TcpStream) -> ServerResponse {
+        let id = String::from_utf8(self.draw.buffers.get("id").unwrap().1.to_vec()).unwrap();
+        let passwd = String::from_utf8(self.draw.buffers.get("passwd").unwrap().1.to_vec()).unwrap();
+        let request = ServerRequest::NewSession(NewSessionRequest::new(&id, &passwd));
+        stream.write(&request.to_bytes().unwrap()).await.unwrap();
+        stream.flush().await.unwrap();
+        let mut buffer = [0;1024];
+        stream.read(&mut buffer).await.unwrap();
+        ServerResponse::from_bytes((&buffer, 0)).unwrap().1
+    }
+
+    async fn draw_join_game_menu(&mut self, handle: &mut RaylibHandle, thread: &RaylibThread, stream: &mut TcpStream) {
+        let mut handle = clear_screen(handle, thread);
+        let handle = &mut handle;
+
+        self.draw.draw_label("Join Game", handle, [0.0, 25.0]);
+        self.draw.draw_label("Session ID:", handle, [0.0, 5.0]);
+        self.draw.draw_textbox("id", handle, [0.0, 0.0]);
+        self.draw.draw_label("Session Password:", handle, [0.0, -15.0]);
+        self.draw.draw_textbox("passwd", handle, [0.0, -20.0]);
+        if self.draw.draw_button("Back to Main Menu", handle, [-15.0, -30.0]) {
+            self.state = GameState::MainMenu;
+        }
+        if self.draw.draw_button("Join Session", handle, [15.0, -30.0]) {
+            match self.join_game(stream).await {
+                ServerResponse::Ok(signal) => {
+                    self.state = GameState::InGame;
+                    self.server_error = None;
+                },
+                ServerResponse::InvalidRequest(reason) => {
+                    self.state = GameState::ErrorMessage;
+                    self.server_error = reason.into();
+                    *stream = get_stream().await;
+                }
+            }
+        }
+    }
+    
+    fn draw_server_error(&mut self, handle: &mut RaylibHandle, thread: &RaylibThread) {
+        let mut handle = clear_screen(handle, thread);
+        let handle = &mut handle;
+        self.draw.draw_label(&self.server_error.as_ref().unwrap().to_string(), handle, [0.0, 30.0]);
+        if self.draw.draw_button("Back", handle, [0.0, 0.0]) {
+            self.state = GameState::MainMenu;
+        }
+    }
+
+    async fn join_game(&mut self, stream: &mut TcpStream) -> ServerResponse {
+        let id = String::from_utf8(self.draw.buffers.get("id").unwrap().1.to_vec()).unwrap();
+        let passwd = String::from_utf8(self.draw.buffers.get("passwd").unwrap().1.to_vec()).unwrap();
+        let request = ServerRequest::JoinSession(JoinSessionRequest::new(&id, &passwd));
+        stream.write(&request.to_bytes().unwrap()).await.unwrap();
+        let mut buffer = [0;1024];
+        stream.read(&mut buffer).await.unwrap();
+        ServerResponse::from_bytes((&buffer, 0)).unwrap().1
+    }
+
     async fn do_game_logic(
         &mut self,
         handle: &mut RaylibHandle,
@@ -101,6 +185,21 @@ impl GameManager {
             }
         }
         self.players = new_state.players;
+        /*for player in self.players.iter() {
+            let mut draw_handle = handle.begin_drawing(thread);
+            let mut draw_handle = draw_handle.begin_mode3D(self.player.camera);
+            println!("drawing players");
+            draw_handle.draw_model(
+                &self.player.object.model,
+                Vector3::new(
+                    player.translation[0],
+                    player.translation[1],
+                    player.translation[2],
+                ),
+                1.0,
+                Color::WHITE,
+            );
+        }*/
     }
     pub fn new(
         sky_shader: Shader,
@@ -116,11 +215,13 @@ impl GameManager {
             player: Player::new(
                 camera,
                 1.0,
-                Object::new(handle, thread, "player".into(), [0.0; 3], [0.0; 4]),
+                Object::new(handle, thread, "DCPlayer".into(), [0.0; 3], [0.0; 4]),
                 Vector3::zero(),
             ),
-            state: GameState::Menu,
+            state: GameState::MainMenu,
             once_game: false,
+            draw: Draw::new(handle),
+            server_error: None
         }
     }
 
@@ -195,4 +296,10 @@ impl GameManager {
     }
 
     fn draw_lights(&mut self, handle: &mut RaylibDrawHandle) {}
+}
+
+fn clear_screen<'a>(handle: &'a mut RaylibHandle, thread: &'a RaylibThread) -> RaylibDrawHandle<'a> {
+    let mut handle = handle.begin_drawing(thread);
+    handle.clear_background(Color::WHITE);
+    handle
 }

@@ -1,15 +1,10 @@
 use game::GameManager;
 use network::get_stream;
-use raylib::{
-    camera::Camera3D,
-    math::{Rectangle, Vector3},
-    rgui::RaylibDrawGui,
-    shaders::RaylibShader,
-};
-use reader::*;
-use std::{collections::HashMap, ffi::CStr};
+use raylib::{camera::Camera3D, math::Vector3, shaders::RaylibShader};
 use tokio::io::AsyncWriteExt;
 
+pub mod gui;
+pub mod session;
 pub mod game;
 pub mod lights;
 pub mod network;
@@ -19,7 +14,8 @@ pub mod reader;
 
 #[tokio::main]
 async fn main() {
-    build_models("static/models/scene.obj", "static/models/scene.mtl");
+    //delete_models();
+    //build_models("static/models/scene.obj", "static/models/scene.mtl");
     let (mut handle, thread) = raylib::init()
         .height(768)
         .width(1366)
