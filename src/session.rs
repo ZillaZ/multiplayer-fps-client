@@ -1,5 +1,7 @@
 use deku::prelude::*;
 
+use crate::network::Reason;
+
 #[derive(DekuRead, DekuWrite)]
 pub struct NewSessionRequest {
     #[deku(update = "self.id.len()")]
@@ -63,5 +65,5 @@ pub enum JoinResponse {
     #[deku(id = "0x1")]
     Ok,
     #[deku(id = "0x2")]
-    WrongPassword,
+    Err(Reason),
 }

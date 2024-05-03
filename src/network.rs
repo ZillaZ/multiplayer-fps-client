@@ -21,6 +21,8 @@ pub enum Reason {
     InvalidPassword,
     #[deku(id = "0x5")]
     IdDoesntExist,
+    #[deku(id = "0x6")]
+    WrongPassword
 }
 
 impl ToString for Reason {
@@ -31,7 +33,8 @@ impl ToString for Reason {
             InvalidRequestFormat => "The request is invalid.".into(),
             InvalidIdFormat => "The given ID is invalid".into(),
             InvalidPassword => "The given password is invalid".into(),
-            IdDoesntExist => "There is no session with the given ID".into()
+            IdDoesntExist => "There is no session with the given ID".into(),
+            WrongPassword => "The given password is incorrect".into()
         }
     }
 }
@@ -48,15 +51,15 @@ pub enum ServerResponse {
 pub struct PlayerSignal {
     desired_mov: [f32; 3],
     desired_rot: [f32; 2],
-    pub dt: f32,
+    camera_radius: f32,
 }
 
 impl PlayerSignal {
-    pub fn new(desired_mov: Vector3, desired_rot: Vector2, dt: f32) -> Self {
+    pub fn new(desired_mov: Vector3, desired_rot: Vector2, camera_radius: f32) -> Self {
         Self {
             desired_mov: desired_mov.to_array(),
             desired_rot: [desired_rot.x, desired_rot.y],
-            dt,
+            camera_radius,
         }
     }
 }

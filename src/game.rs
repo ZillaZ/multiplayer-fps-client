@@ -1,5 +1,4 @@
 use deku::{DekuContainerRead, DekuContainerWrite};
-use raylib::ffi::rAudioBuffer;
 use raylib::prelude::*;
 use raylib::{camera::Camera3D, drawing::RaylibMode3DExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Join};
@@ -9,7 +8,7 @@ use tokio::net::TcpStream;
 use crate::gui::Draw;
 use crate::network::{get_stream, Reason, ResponseSignal, ServerResponse};
 use crate::player::Player;
-use crate::session::{JoinSessionRequest, NewSessionRequest, ServerRequest};
+use crate::session::*;
 use crate::{lights, network, objects::*};
 
 #[derive(PartialEq, Eq)]
@@ -126,11 +125,11 @@ impl GameManager {
         }
         if self.draw.draw_button("Join Session", handle, [15.0, -30.0]) {
             match self.join_game(stream).await {
-                ServerResponse::Ok(signal) => {
+                JoinResponse::Ok => {
                     self.state = GameState::InGame;
                     self.server_error = None;
                 },
-                ServerResponse::InvalidRequest(reason) => {
+                JoinResponse::Err(reason) => {
                     self.state = GameState::ErrorMessage;
                     self.server_error = reason.into();
                     *stream = get_stream().await;
@@ -148,14 +147,14 @@ impl GameManager {
         }
     }
 
-    async fn join_game(&mut self, stream: &mut TcpStream) -> ServerResponse {
+    async fn join_game(&mut self, stream: &mut TcpStream) -> JoinResponse {
         let id = String::from_utf8(self.draw.buffers.get("id").unwrap().1.to_vec()).unwrap();
         let passwd = String::from_utf8(self.draw.buffers.get("passwd").unwrap().1.to_vec()).unwrap();
         let request = ServerRequest::JoinSession(JoinSessionRequest::new(&id, &passwd));
         stream.write(&request.to_bytes().unwrap()).await.unwrap();
         let mut buffer = [0;1024];
         stream.read(&mut buffer).await.unwrap();
-        ServerResponse::from_bytes((&buffer, 0)).unwrap().1
+        JoinResponse::from_bytes((&buffer, 0)).unwrap().1
     }
 
     async fn do_game_logic(

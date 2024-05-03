@@ -10,6 +10,7 @@ pub struct Player {
     pub object: Object,
     pub position: Vector3,
     pub fwd: Vector3,
+    camera_radius: f32,
     rotation: Vector3,
     speed: f32,
     pitch: f32,
@@ -29,6 +30,7 @@ impl Player {
             right: Vector3::right(),
             object,
             rotation: Vector3::zero(),
+            camera_radius: 5.0,
         }
     }
 
@@ -60,13 +62,18 @@ impl Player {
     pub fn update(&mut self, handle: &mut RaylibHandle) -> PlayerSignal {
         let desired_mov = self.get_input(handle);
         let desired_rot = self.update_camera(handle);
-        PlayerSignal::new(desired_mov, desired_rot, handle.get_frame_time())
+        self.update_radius(handle);
+        PlayerSignal::new(desired_mov, desired_rot, self.camera_radius)
     }
 
     pub fn update_camera(&mut self, rl: &mut RaylibHandle) -> Vector2 {
         rl.get_mouse_delta()
     }
 
+    fn update_radius(&mut self, handle: &mut RaylibHandle) {
+        self.camera_radius -= handle.get_mouse_wheel_move();
+        self.camera_radius = self.camera_radius.clamp(2.5, 20.0);
+    }
     pub fn set_state(&mut self, new_state: ResponseSignal) {
         self.position = Vector3::new(
             new_state.translation[0],
